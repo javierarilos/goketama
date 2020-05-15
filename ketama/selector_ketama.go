@@ -7,8 +7,8 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"sync"
 )
-
 
 // num of positions in the ring each node has:
 // https://github.com/dustin/java-memcached-client/blob/c232307ad8e0c7ccc926e495dd7d5aad2d713318/src/main/java/net/spy/memcached/KetamaNodeLocator.java#L266
@@ -16,16 +16,24 @@ import (
 const numRepsPerNode = 160 * 4
 
 type KetamaNodeSelector struct {
-	nodes        []net.Addr
-	virtualNodes []VNode
+	nodes  []net.Addr
+	vNodes []VNode
+	mu     sync.Mutex
 }
 
 type VNode struct {
 	point uint32
-	node net.Addr
+	node  net.Addr
 }
 
 func NewKetamaNodeSelector(newNodes ...string) (*KetamaNodeSelector, error) {
+
+	nodeSel := &KetamaNodeSelector{}
+	nodeSel.SetNodes(newNodes...)
+	return nodeSel, nil
+}
+
+func (nodeSel *KetamaNodeSelector) SetNodes(newNodes ...string) error {
 
 	totalKetamaPoints := len(newNodes) * numRepsPerNode
 
@@ -37,12 +45,12 @@ func NewKetamaNodeSelector(newNodes ...string) (*KetamaNodeSelector, error) {
 	for i, node := range newNodes {
 		nodeAddress, err := toAddress(node)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		selNodes[i] = nodeAddress
 		for j := 0; j < numRepsPerNode; j++ {
-			hash := hashForVNode(node, j)
+			hash := hashForVNode(nodeAddress, j)
 			selVNodes[i*numRepsPerNode+j] = VNode{
 				point: hash,
 				node:  nodeAddress}
@@ -53,18 +61,18 @@ func NewKetamaNodeSelector(newNodes ...string) (*KetamaNodeSelector, error) {
 		return selVNodes[i].point < selVNodes[j].point
 	})
 
-	k := &KetamaNodeSelector{
-		nodes:        selNodes,
-		virtualNodes: selVNodes,
-	}
+	nodeSel.mu.Lock()
+	defer nodeSel.mu.Unlock()
 
-	return k, nil
+	nodeSel.nodes = selNodes
+	nodeSel.vNodes = selVNodes
+	return nil
 }
 
-func hashForVNode(server string, i int) uint32 {
+func hashForVNode(addr net.Addr, i int) uint32 {
 	// TODO benchmark against faster hashes: murmur, xxhash, metrohash, siphash1-3
-	serverIterationMd5 := md5.Sum([]byte(fmt.Sprintf("%s-%di", server, i)))
-	return binary.LittleEndian.Uint32(serverIterationMd5[0 : 4])
+	serverIterationMd5 := md5.Sum([]byte(fmt.Sprintf("%s-%di", addr, i)))
+	return binary.LittleEndian.Uint32(serverIterationMd5[0:4])
 }
 
 func toAddress(server string) (net.Addr, error) {
@@ -83,13 +91,13 @@ func toAddress(server string) (net.Addr, error) {
 	}
 }
 
-func (nn *KetamaNodeSelector) PickServer(key string) (net.Addr, error) {
+func (nodeSel *KetamaNodeSelector) PickServer(key string) (net.Addr, error) {
 
 	fmt.Println("TODO: implement bradfitz/gomemcache PickServer")
 	return nil, nil
 }
 
-func (nn *KetamaNodeSelector) Each(f func(net.Addr) error) error {
+func (nodeSel *KetamaNodeSelector) Each(f func(net.Addr) error) error {
 	fmt.Println("TODO: implement bradfitz/gomemcache Each")
 	return nil
 }
