@@ -71,8 +71,7 @@ func (nodeSel *KetamaNodeSelector) SetNodes(newNodes ...string) error {
 
 func hashForVNode(addr net.Addr, i int) uint32 {
 	// TODO benchmark against faster hashes: murmur, xxhash, metrohash, siphash1-3
-	serverIterationMd5 := md5.Sum([]byte(fmt.Sprintf("%s-%di", addr, i)))
-	return binary.LittleEndian.Uint32(serverIterationMd5[0:4])
+	return hash([]byte(fmt.Sprintf("%s-%di", addr, i)))
 }
 
 func toAddress(server string) (net.Addr, error) {
@@ -92,9 +91,22 @@ func toAddress(server string) (net.Addr, error) {
 }
 
 func (nodeSel *KetamaNodeSelector) PickServer(key string) (net.Addr, error) {
+	hash := hash([]byte(key))
+	return findVNodeServer(hash, nodeSel.vNodes).node, nil
+}
 
-	fmt.Println("TODO: implement bradfitz/gomemcache PickServer")
-	return nil, nil
+func findVNodeServer(hash uint32, vNodes []VNode) VNode {
+	for _, vNode := range vNodes {
+		if hash <= vNode.point {
+			return vNode
+		}
+	}
+	return vNodes[0]
+}
+
+func hash(bytes []byte) uint32 {
+	sum := md5.Sum(bytes)
+	return binary.LittleEndian.Uint32(sum[:4])
 }
 
 func (nodeSel *KetamaNodeSelector) Each(f func(net.Addr) error) error {
