@@ -1,9 +1,9 @@
 package ketama
 
 import (
-	"crypto/md5"
-	"encoding/binary"
 	"fmt"
+	"github.com/cespare/xxhash"
+	"github.com/spaolacci/murmur3"
 	"net"
 	"sort"
 	"strings"
@@ -70,8 +70,9 @@ func (nodeSel *KetamaNodeSelector) SetNodes(newNodes ...string) error {
 }
 
 func hashForVNode(addr net.Addr, i int) uint32 {
-	// TODO benchmark against faster hashes: murmur, xxhash, metrohash, siphash1-3
-	return hash([]byte(fmt.Sprintf("%s-%di", addr, i)))
+	// using xxhash, fastest.
+	// tried from std lib: md5 is very slow and crc32 was not passing test on fairness.
+	return uint32(xxhash.Sum64([]byte(fmt.Sprintf("%s-%d", addr.String(), i))))
 }
 
 func toAddress(server string) (net.Addr, error) {
@@ -91,7 +92,7 @@ func toAddress(server string) (net.Addr, error) {
 }
 
 func (nodeSel *KetamaNodeSelector) PickServer(key string) (net.Addr, error) {
-	hash := hash([]byte(key))
+	hash := hashMurmur32([]byte(key))
 	return findVNodeServer(hash, nodeSel.vNodes).node, nil
 }
 
@@ -104,9 +105,8 @@ func findVNodeServer(hash uint32, vNodes []VNode) VNode {
 	return vNodes[0]
 }
 
-func hash(bytes []byte) uint32 {
-	sum := md5.Sum(bytes)
-	return binary.LittleEndian.Uint32(sum[:4])
+func hashMurmur32(bytes []byte) uint32 {
+	return murmur3.Sum32(bytes)
 }
 
 func (nodeSel *KetamaNodeSelector) Each(f func(net.Addr) error) error {

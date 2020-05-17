@@ -86,12 +86,11 @@ func TestPickServerBalancesBetweenServers(t *testing.T) {
 		}
 	}
 
-	expectThat(t, "Expected total keys per server should be 1000.", keysForServer1 + keysForServer2 + keysForServer3 == 1000)
+	expectThat(t, "Expected total keys per server should be 1000.", keysForServer1+keysForServer2+keysForServer3 == 1000)
 	expectThat(t, "Expected total keys for server 1 is more than 300", keysForServer1 > 300)
 	expectThat(t, "Expected total keys for server 2 is more than 300", keysForServer2 > 300)
 	expectThat(t, "Expected total keys for server 3 is more than 300", keysForServer3 > 300)
 }
-
 
 func TestRemoveServerImpactOnKeysLocation(t *testing.T) {
 	// given a selector for three servers
@@ -128,7 +127,7 @@ func TestRemoveServerImpactOnKeysLocation(t *testing.T) {
 		serverWhen2 := serversWith2[i]
 
 		if serverWhen3.String() != server1 {
-			expectEquals(t, "When picked server 2 or 3, expected to not move when removed server 1", serverWhen3, serverWhen2)
+			expectEquals(t, "When picked server 2 or 3, expected to not move when removed server 1", serverWhen3.String(), serverWhen2.String())
 		}
 	}
 }
@@ -162,12 +161,6 @@ func expectEquals(t *testing.T, msg string, actual, expected interface{}) {
 
 func expectSuccess(t *testing.T, s string, err error) {
 	if err != nil {
-		t.Error(s, err)
-	}
-}
-
-func expectError(t *testing.T, s string, err error) {
-	if err == nil {
 		t.Error(s, err)
 	}
 }

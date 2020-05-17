@@ -12,16 +12,7 @@ clean:
 build:
 	go build ./...
 
-.PHONY: test
-test: ## Run tests
-	go test -v ./...
-
 .PHONY: bench
 bench: ## Run benchmarkds
 	go test -bench=. ./...
-
-.PHONY: cov
-cov: ## test with coverage
-	go test -v -coverprofile coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
 
