@@ -3,7 +3,6 @@ package ketama
 import (
 	"fmt"
 	"github.com/cespare/xxhash"
-	"github.com/spaolacci/murmur3"
 	"net"
 	"sort"
 	"strings"
@@ -72,7 +71,12 @@ func (nodeSel *KetamaNodeSelector) SetNodes(newNodes ...string) error {
 func hashForVNode(addr net.Addr, i int) uint32 {
 	// using xxhash, fastest.
 	// tried from std lib: md5 is very slow and crc32 was not passing test on fairness.
-	return uint32(xxhash.Sum64([]byte(fmt.Sprintf("%s-%d", addr.String(), i))))
+	vNodeBytes := []byte(fmt.Sprintf("%s-%d", addr.String(), i))
+	return sum(vNodeBytes)
+}
+
+func sum(vNodeBytes []byte) uint32 {
+	return uint32(xxhash.Sum64(vNodeBytes))
 }
 
 func toAddress(server string) (net.Addr, error) {
@@ -92,11 +96,20 @@ func toAddress(server string) (net.Addr, error) {
 }
 
 func (nodeSel *KetamaNodeSelector) PickServer(key string) (net.Addr, error) {
-	hash := hashMurmur32([]byte(key))
-	return findVNodeServer(hash, nodeSel.vNodes).node, nil
+	return nodeSel.PickServerDych(key)
 }
 
-func findVNodeServer(hash uint32, vNodes []VNode) VNode {
+func (nodeSel *KetamaNodeSelector) PickServerDych(key string) (net.Addr, error) {
+	hash := sum([]byte(key))
+	return findDychotomic(hash, nodeSel.vNodes).node, nil
+}
+
+func (nodeSel *KetamaNodeSelector) PickServerSeq(key string) (net.Addr, error) {
+	hash := sum([]byte(key))
+	return findSequential(hash, nodeSel.vNodes).node, nil
+}
+
+func findSequential(hash uint32, vNodes []VNode) VNode {
 	for _, vNode := range vNodes {
 		if hash <= vNode.point {
 			return vNode
@@ -105,8 +118,34 @@ func findVNodeServer(hash uint32, vNodes []VNode) VNode {
 	return vNodes[0]
 }
 
-func hashMurmur32(bytes []byte) uint32 {
-	return murmur3.Sum32(bytes)
+func findDychotomic(hash uint32, vNodes []VNode) VNode {
+	return findDychotomicDefault(hash, vNodes, vNodes[0])
+}
+
+func findDychotomicDefault(hash uint32, vNodes []VNode, defaultVNode VNode) VNode {
+	if len(vNodes) == 0 {
+		return defaultVNode
+	}
+
+	if len(vNodes) == 1 {
+		if hash < vNodes[0].point {
+			return vNodes[0]
+		} else {
+			return defaultVNode
+		}
+	}
+
+	pos := len(vNodes) / 2
+
+	if vNodes[pos-1].point <= hash && hash <= vNodes[pos].point {
+		return vNodes[pos]
+	}
+
+	if hash > vNodes[pos].point {
+		return findDychotomicDefault(hash, vNodes[pos:], defaultVNode)
+	} else {
+		return findDychotomicDefault(hash, vNodes[:pos], defaultVNode)
+	}
 }
 
 func (nodeSel *KetamaNodeSelector) Each(f func(net.Addr) error) error {

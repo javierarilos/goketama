@@ -44,6 +44,29 @@ func TestPickServerIsDeterministic(t *testing.T) {
 	expectThat(t, "Expected servers to be the same for each key", sameServers(servers, servers2))
 }
 
+func TestPickServersDychAndSeqEqual(t *testing.T) {
+	// given
+	nodes := []string{"localhost:11211", "localhost:11212", "localhost:11213"}
+	sel, err := NewKetamaNodeSelector(nodes...)
+	keys := []string{"key1", "a-much-longer-key-than-previous", "some-id-for-your-app", "golang rocks", "kemtama works"}
+
+	// when - picking servers for all keys twice
+	servers := make([]net.Addr, len(keys))
+	for i, key := range keys {
+		servers[i], err = sel.PickServerDych(key)
+		expectSuccess(t, "Expected success picking server", err)
+	}
+
+	servers2 := make([]net.Addr, len(keys))
+	for i, key := range keys {
+		servers2[i], err = sel.PickServerSeq(key)
+		expectSuccess(t, "Expected success picking server", err)
+	}
+
+	// then
+	expectThat(t, "Expected servers to be the same for each key", sameServers(servers, servers2))
+}
+
 func TestPickServerBalancesBetweenServers(t *testing.T) {
 	// given
 	server1 := "127.0.0.1:11211"
@@ -129,6 +152,36 @@ func TestRemoveServerImpactOnKeysLocation(t *testing.T) {
 		if serverWhen3.String() != server1 {
 			expectEquals(t, "When picked server 2 or 3, expected to not move when removed server 1", serverWhen3.String(), serverWhen2.String())
 		}
+	}
+}
+
+func BenchmarkKetamaNodeSelector_PickServerDych(b *testing.B) {
+	// given a selector for three servers
+	server1 := "127.0.0.1:11211"
+	server2 := "127.0.0.1:11212"
+	server3 := "127.0.0.1:11213"
+	nodes := []string{server1, server2, server3}
+
+	sel, _ := NewKetamaNodeSelector(nodes...)
+
+	for i := 0; i < b.N; i++ {
+		key := "key-number-" + string(i)
+		sel.PickServerDych(key)
+	}
+}
+
+func BenchmarkKetamaNodeSelector_PickServerSeq(b *testing.B) {
+	// given a selector for three servers
+	server1 := "127.0.0.1:11211"
+	server2 := "127.0.0.1:11212"
+	server3 := "127.0.0.1:11213"
+	nodes := []string{server1, server2, server3}
+
+	sel, _ := NewKetamaNodeSelector(nodes...)
+
+	for i := 0; i < b.N; i++ {
+		key := "key-number-" + string(i)
+		sel.PickServerSeq(key)
 	}
 }
 
